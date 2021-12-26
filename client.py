@@ -1,42 +1,33 @@
 import socket
 import cv2
-import time
 import numpy as np
 import pickle
 
-def recvall(sock, count):
-    buf = b''#buf是一个byte类型
-    while count:
-        #接受TCP套接字的数据。数据以字符串形式返回，count指定要接收的最大数据量.
-        newbuf = sock.recv(count)
-        if not newbuf: return None
-        buf += newbuf
-        count -= len(newbuf)
-    return buf
+
+def send_file_2_client(new_client_socket, frame):
+    frame = frame.tobytes()
+    data = {
+        'image': frame,
+    }
+    data = pickle.dumps(data)
+    new_client_socket.send(str.encode(str(len(data)).ljust(16)))
+    new_client_socket.send(data)
+
 
 def main():
-    
-    dest_ip = "localhost"
-    dest_port = 8080
-    while True:
-        #创建套接字
-        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #链接服务器
-        tcp_socket.connect((dest_ip, dest_port))
-        length = recvall(tcp_socket,16)#获得图片文件的长度,16代表获取长度
-        stringData = recvall(tcp_socket, int(length))#根据获得的文件长度，获取图片文件
-        stringData = pickle.loads(stringData)
-        stringData = stringData['image']
-        data = np.frombuffer(stringData, np.uint8)#将获取到的字符流数据转换成1维数组
-        decimg=cv2.imdecode(data,cv2.IMREAD_COLOR)#将数组解码成图像
-        cv2.imshow("img",decimg)
-        cv2.waitKey(1)
-        tcp_socket.send(("I'm Receive").encode('utf-8'))
-    tcp_socket.close()
-        # time.sleep(1)
-    # 8. 关闭套接字
-    
-
+    tcp_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp_server_socket.connect(("192.168.1.103", 8080))  # 连接服务器 发送端为客服端
+    cap = cv2.VideoCapture(0)
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 5]
+    # 等待客户端连接主机
+    while cap.isOpened():
+        rect, frame = cap.read()
+        frame = np.array(frame, dtype=np.uint8)
+        _, frame = cv2.imencode('.png', frame, encode_param)
+        send_file_2_client(tcp_server_socket, frame)
+        receive = tcp_server_socket.recv(1024)
+        print(receive)
+    tcp_server_socket.close()
 
 if __name__ == "__main__":
     main()
